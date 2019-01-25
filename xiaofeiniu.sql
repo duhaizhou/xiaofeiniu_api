@@ -1,0 +1,10 @@
+SET NAMES UTF8;
+DROP DATABASE IF EXISTS xiaofeiniu;
+CREATE DATABASE xiaofeiniu CHARSET=UTF8;
+USE xiaofeiniu;
+
+/**=管理员信息表**/
+CREATE TABLE xfn_admin(
+  aid INT PRIMARY KEY AUOT_INCREMENT,
+  aname VARCHAR(64)
+)
