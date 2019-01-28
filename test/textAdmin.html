@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+</head>
+<body>
+  <button id="btn1">登录</button>
+  <button id="btn2">退出</button>
+  <button id="btn3">修改密码</button>
+  <button id="btn4">查询所有菜品</button>
+  <script src="axios.min.js"></script>
+  <script>
+    btn1.onclick=function(){//get方法不允许发送请求主体
+      //var data={aname:'admin',apwd:'123456'}
+      axios.get('http://127.0.0.1:8090/admin/login/admin/123456')
+      .then((result)=>{
+        console.log('登录结果为：')
+        console.log(result.data);
+      }).catch((err)=>{
+        console.log(err);
+      })
+    }
+    btn3.onclick=function(){
+      var data={aname:'admin',oldPwd:'123456',newPwd:'666666'};
+      axios.patch('http://127.0.0.1:8090/admin',data)
+      .then((result)=>{
+        console.log('修改结果为：');
+        console.log(result);
+      }).catch((err)=>{
+        console.log(err);
+      })
+    }
+    btn4.onclick=function(){
+      axios.get('http://127.0.0.1:8090/admin/dish')
+      .then((result)=>{
+        console.log('查询的结果为：');
+        console.log(result);
+      })
+    }
+    
+  </script>
+</body>
+</html>
