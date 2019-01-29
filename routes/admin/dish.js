@@ -8,6 +8,7 @@ const router=express.Router();
 module.exports=router;
 
 
+
 /*
  * API: GET /admin/dish
  * 含义：获取所有菜品，类别进行分类
@@ -20,95 +21,94 @@ module.exports=router;
  * ]
  */
 router.get('/',(req,res)=>{
-  //查询所有的菜品类别
+  //为了获得所有菜品，必须先查询所有的菜品类别
   pool.query('SELECT cid,cname FROM xfn_category ORDER BY cid',(err,result)=>{
     if(err) throw err;
-    var categoryList=result;//菜品类别数组
+    var categoryList=result;
     var count=0;
-    for(var c of categoryList){
-      count++;
-      pool.query('SELECT * FROM xfn_dish WHERE categoryId=?',c.cid,(err,result)=>{
-        if(err) throw err;
-        console.log(c);
-
-        console.log(result);
-        c.dishList=result;//每一类别的所有菜品列表
-        console.log(c);
-          
-      });
-      // if(count==categoryList.length){
+    for(let c of categoryList){//循环遍历每个菜品类别，查询该类别下有哪些菜品(***循环体内出现异步操作，循环变量必须使用let声明)
+      
+      pool.query('SELECT * FROM xfn_dish WHERE categoryId=? ORDER BY did DESC',c.cid,(err,result)=>{
         
-      //   res.send(categoryList);
-      // }
+        if(err) throw err;
+        c.dishList=result;//在菜品类别表中新加一列来保存某一类菜品的所有菜品
+        count++;
+        console.log(c);
+        //必须保证所有的类别下的菜品都查询完成才能发送响应消息---这些查询都是异步执行的
+        if(count==categoryList.length){
+          res.send(categoryList);
+        }
+      });
     }
   })
 });
 
 
 /**
- * API: DELETE /admin/category/:cid
- * 含义：根据表示菜品编号的路由参数。删除该菜品
- * 返回值形式：
- * {code:200,msg:'1 category deleted'}
- * {code:400,msg:'0 category deleted'}
+ * POST /admin/dish/image
+ * 请求参数：
+ * 接受客户端上传的菜品的图片，保存在服务器上，返回该图片在服务器上的随机文件名
+ * 响应数据：{code:200,msg:'upload succ',fileName:'1351287612-2342.jpg'}
  */
-router.delete('/:cid',(req,res)=>{
-  //注意：删除菜品类别之前必须先把属于该菜品类别的菜品的类别编号设置为NULL
-    pool.query('UPDATE xfn_dish SET categoryId=NULL WHERE categoryId=?',req.params.cid,(err,result)=>{
-      if(err) throw err;
-      //至此指定类别的菜品已经修改完毕
-      pool.query('DELETE FROM xfn_category WHERE cid=?',req.params.cid,(err,result)=>{
-        if(err) throw err;
-        //获取DELETE语句在数据库中影响的行数
-        if(result.affectedRows>0)
-          res.send({code:200,msg:"1 category deleted"})
-        else{
-          res.send({code:400,msg:'0 category deleted'});
-        }
-      })
-    })
+//引入multer中间件
+const multer=require('multer');
+const fs=require('fs');
+var upload=multer({dest:'tmp/'});//指定客户端上传的文件临时存储路径
+//定义路由，使用文件上传中间件
+router.post('/image',upload.single('dishImg'),(req,res)=>{
+  //console.log(req.file);//客户端上传的图片文件
+  //console.log(req.body);//客户端随同图片提交的字符串
+  //把客户端上传的文件从临时目录转移到永久的图片路径下
+  var tmpFile=req.file.path;//临时文件名
+  var suffix=req.file.originalname.substring(req.file.originalname.lastIndexOf('.'));//初始文件名中的后缀部分
+  var newFile=randFileName(suffix);//目标文件名
+  fs.rename(tmpFile,'img/dish/'+newFile,()=>{//把临时文件转移到永久文件
+    res.send({code:200,msg:'upload succ',fileName:newFile})
   })
  
+
+
+})
+
+//生成一个临时文件名
+//参数：suffix表示要生成的文件名中的后缀
+function randFileName(suffix){
+  var time=new Date().getTime();
+  var num=Math.floor(Math.random()*(10000-1000)+1000);//这是一个4位的随机数字
+  return time+'-'+num+suffix;
+
+}
 /**
- * API: POST /admin/category
- * 请求主体参数：{cname,'xxx'}
- * 含义：添加新的菜品类别
- * 返回值形式：
- * {code:200,msg:'1 category added',cid:x}
- * 
+ * POST /admin/dish
+ * 请求参数：{title:'xx',imgUrl:'..jpg',price:xx,detail:'xx',categoryId:xx}
+ *添加一个新的菜品
+ * 输出信息：
+ * {code:200,msg:'dish added succ',dishId:46}
  */
 router.post('/',(req,res)=>{
-  var data=req.body;//形如{cname:'xxx'}
-  pool.query('INSERT INTO xfn_category SET ?',data,(err,result)=>{
-    //注意此处SQL语句的简写
+  pool.query('INSERT INTO xfn_dish SET ?',
+  req.body,(err,result)=>{
     if(err) throw err;
-    if(result.affectedRows>0){
-      res.send({code:200,msg:'1 category added'})
-    }else{
-      res.send({code:400,msg:'add category failed'})
-    }
+    res.send({code:200,msg:'dish added succ',
+    dishId:result.insertId})//将INSERT语句产生的自增编号返回客户端
   })
 })
-/* API:PUT /admin/category
- * 请求主体参数：{cid:x,cname:'xxx'}
- * 含义:根据菜品类别编号修改类别
- * 返回值形式：
- * {code:200,msg:'1 category modified'}
- * {code:400,msg:'0 category modified,not exists'}
- * {code:401,msg:'0 category modified,no modification'}
+
+
+/**
+ *DELETE /admin/dish/:did
+ *根据指定的菜品编号删除该菜品
+ *输出数据：
+ *{code:200,msg:'dish deleted succ'}
+ *{code:400,msg:'dish not exists'} 
  */
-router.put('/',(req,res)=>{
-  var data=req.body;//请求数据{cid:xx,cname:'xx'}
-  //TODO:此处可以对输入数据进行验证
-  pool.query('UPDATE xfn_category SET ? WHERE cid=?',[data,data.cid],(err,result)=>{
-    if(err) throw err;
-    console.log(result);
-    if(result.changedRows>0){//实际改变了一行
-      res.send({code:200,msg:'1 category modified'});
-    }else if(result.affectedRows==0){
-      res.send({code:400,msg:'0 category modified,not exists'});
-    }else if(result.affectedRows==1 && result.changedRows==0){ //影响到了一行，但实际改变了0行--新值和旧值完全一样
-      res.send({code:401,msg:'0 category modifeid,no modification'})
-    }
-  })
-})
+
+
+ /**
+ * PUT /admin/dish
+ * 请求参数：{data:xx,title:'xx',imgUrl:'..jpg',price:xx,detail:'xx',categoryId:xx}
+ * 根据指定的菜品编号修改菜品
+ * 输出数据
+ * {code:200,msg:'dish updated succ'}
+ * {code:400,msg:'dish not exists'}
+ */
